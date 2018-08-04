@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+#from __future__ import absolute_import
+#from __future__ import division
+#from __future__ import print_function
 
 import torch
 import torch.nn as nn
@@ -78,7 +78,7 @@ class BasicBlock(nn.Module):
 
 class Network(nn.Module):
 
-    def __init__(self, num_classes, width_multiplier):
+    def __init__(self, in_channels, num_classes, width_multiplier):
         super(Network, self).__init__()
         width_config = {
             0.25: (24, 48, 96, 512),
@@ -90,19 +90,19 @@ class Network(nn.Module):
         }
         width_config = width_config[width_multiplier]
         self.num_classes = num_classes
-        in_channels = 24
+        first_channels = 24
 
         # outputs, stride, dilation, blocks, type
         self.network_config = [
-            g_name('data/bn', nn.BatchNorm2d(3)),
-            slim.conv_bn_relu('stage1/conv', 3, in_channels, 3, 2, 1),
-            # g_name('stage1/pool', nn.MaxPool2d(3, 2, 1)),
+            g_name('data/bn', nn.BatchNorm2d(in_channels)),
+            slim.conv_bn_relu('stage1/conv', in_channels, first_channels, 3, 2, 1),
             g_name('stage1/pool', nn.MaxPool2d(3, 2, 0, ceil_mode=True)),
-            (width_config[0], 2, 1, 4, 'b'),
-            (width_config[1], 2, 1, 8, 'b'), # x16
-            (width_config[2], 2, 1, 4, 'b'), # x32
+            (width_config[0], 2, 1, 4),
+            (width_config[1], 2, 1, 8), # x16
+            (width_config[2], 2, 1, 4), # x32
+            (width_config[2], 2, 1, 4), # x64
             slim.conv_bn_relu('conv5', width_config[2], width_config[3], 1),
-            g_name('pool', nn.AvgPool2d(7, 1)),
+            g_name('pool', nn.AdaptiveAvgPool2d(1)),
             g_name('fc', nn.Conv2d(width_config[3], self.num_classes, 1)),
         ]
         self.network = []
@@ -110,16 +110,15 @@ class Network(nn.Module):
             if isinstance(config, nn.Module):
                 self.network.append(config)
                 continue
-            out_channels, stride, dilation, num_blocks, stage_type = config
+            out_channels, stride, dilation, num_blocks = config
             stage_prefix = 'stage_{}'.format(i - 1)
-            blocks = [BasicBlock(stage_prefix + '_1', in_channels, 
-                out_channels, stride, dilation)]
+            blocks = [BasicBlock(stage_prefix + '_1', first_channels, out_channels, stride, dilation)]
             for i in range(1, num_blocks):
                 blocks.append(BasicBlock(stage_prefix + '_{}'.format(i + 1), 
                     out_channels, out_channels, 1, dilation))
             self.network += [nn.Sequential(*blocks)]
 
-            in_channels = out_channels
+            first_channels = out_channels
         self.network = nn.Sequential(*self.network)
 
         for name, m in self.named_modules():
@@ -205,7 +204,7 @@ if __name__ == '__main__':
 
     ##############################################
     # Initilize a PyTorch model.
-    net = Network(args.num_classes, args.model_width).train(False)
+    net = Network(3, args.num_classes, args.model_width).train(False)
     print(net)
     if args.load_pytorch is not None:
         net.load_state_dict(torch.load(args.load_pytorch, map_location=lambda storage, loc: storage))
