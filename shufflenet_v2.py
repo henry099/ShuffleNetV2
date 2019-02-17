@@ -1,15 +1,11 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-#from __future__ import absolute_import
-#from __future__ import division
-#from __future__ import print_function
+import  torch
+import  torch.nn as nn
 
-import torch
-import torch.nn as nn
-
-from ai import slim
-from ai.slim import g_name
+import  slim
+from    slim import g_name
 
 class BasicBlock(nn.Module):
 
@@ -58,12 +54,12 @@ class Network(nn.Module):
     def __init__(self, in_channels, num_classes, width_multiplier):
         super(Network, self).__init__()
         width_config = {
-            0.25: (24, 48, 96, 512),
-            0.33: (32, 64, 128, 512),
-            0.5: (48, 96, 192, 1024),
-            1.0: (116, 232, 464, 1024),
-            1.5: (176, 352, 704, 1024),
-            2.0: (244, 488, 976, 2048),
+            0.25: (24, 48, 96, 512, 512, 512),
+            # 0.33: (32, 64, 128, 512),
+            # 0.5: (48, 96, 192, 1024),
+            # 1.0: (116, 232, 464, 1024),
+            # 1.5: (176, 352, 704, 1024),
+            # 2.0: (244, 488, 976, 2048),
         }
         width_config = width_config[width_multiplier]
         self.num_classes = num_classes
@@ -75,12 +71,14 @@ class Network(nn.Module):
             slim.conv_bn_relu('stage1/conv', in_channels, first_channels, 3, 2, 1),
             g_name('stage1/pool', nn.MaxPool2d(3, 2, 0, ceil_mode=True)),
             (width_config[0], 2, 1, 4),
-            (width_config[1], 2, 1, 8), # x16
-            (width_config[2], 2, 1, 4), # x32
-            (width_config[2], 2, 1, 4), # x64
-            slim.conv_bn_relu('conv5', width_config[2], width_config[3], 1),
+            (width_config[1], 2, 1, 8),
+            (width_config[2], 2, 1, 4),
+            (width_config[3], 2, 1, 4),
+            (width_config[4], 2, 1, 4),
+            (width_config[4], 2, 1, 4),
+            slim.conv_bn_relu('conv5', width_config[-2], width_config[-1], 1),
             g_name('pool', nn.AdaptiveAvgPool2d(1)),
-            g_name('fc', nn.Conv2d(width_config[3], self.num_classes, 1)),
+            g_name('fc', nn.Conv2d(width_config[-1], self.num_classes, 1)),
         ]
         self.network = []
         for i, config in enumerate(self.network_config):
@@ -105,7 +103,7 @@ class Network(nn.Module):
                     nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        x = self.network(x)
+        x = self.network(x[:,None])
         return x.reshape(x.shape[0], -1)
 
 
